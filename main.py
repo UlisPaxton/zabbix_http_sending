@@ -1,8 +1,6 @@
-import re
 import requests
-from datetime import date
 import urllib
-from pdb import set_trace as d
+
 
 LOG_DIRECTORY = "./logs/"
 ZABBIX_HOST = "zab.h"
@@ -16,7 +14,12 @@ file_descriptor.close()
 
 
 class Detector:
-    """ Прототип детекторов, предоставляет всем наследникам свой конструктор"""
+    """ Прототип детекторов, предоставляет всем наследникам свой конструктор
+    regexp - подстрока, указывающая на необходимость обработки строки лога
+    host - адрес сервера zabbix
+    node - имя узла zabbix
+    key - имя ключа элемента данных
+    """
     detector_list = []
 
     def __init__(self, regexp, host, node, key):
@@ -24,14 +27,14 @@ class Detector:
         self.host = host
         self.node = node
         self.key_name = key
-        self.send_url = f'http://{host}/index.php?server={node}&key={self.key_name}&value='
+        self.send_url = f'http://{host}/index.php?server={self.node}&key={self.key_name}&value='
         self.buffer = ''
         Detector.detector_list.append(self)
 
     def __call__(self, log_string):
         pass
 
-    def send(self):
+    def send_detectors_data_to_zabbix(self):
         """
         отправка собранных данных по http
         :return:
@@ -66,7 +69,7 @@ class SizeDetector(Detector):
     @staticmethod
     def size_to_default_units(size, units):
         """перевод единиц измерения, на вход - кол-во и едницы, на выход кол-во в байтах
-        использовал 1000, а не 1024, потому что забикс преобразовывает с 1024"""
+        использовал 1000, а не 1024, потому что заббикс преобразовывает с 1024"""
         dct = {'b': 1000, 'KB': 1000 ** 2, 'MB': 1000 ** 3, 'GB': 1000 ** 4}
         default_units = 'b'
         return size * dct[units] / dct[default_units]
@@ -79,7 +82,6 @@ class BackupTimeDetector(Detector):
         """
         if self.regexp in log_string:
             splited_string = log_string.split()
-            print(splited_string)
             hours = splited_string[-6]
             minutes = splited_string[-4]
             seconds = splited_string[-2]
@@ -95,4 +97,4 @@ for D_obj in Detector.detector_list:
     for line in log_lines:
         D_obj(line)
 
-    D_obj.send()
+    D_obj.send_detectors_data_to_zabbix()
