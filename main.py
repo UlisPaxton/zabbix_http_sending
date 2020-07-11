@@ -1,9 +1,16 @@
 import requests
 import urllib
 
+"""
+Основная логика в том, чтобы каждую строчку лога пропустить через цепочку
+объектов-детекторов, каждый из которых выделит необходимы ему полезные данные и сохранит в свой буфер.
+По окончании лога все детекторы начинают отправку данных в zabbix.
+подводный камень - кодировка логов, в данном случае UTF-16, Сёма, привет тебе.
+
+"""
 
 LOG_DIRECTORY = "./logs/"
-ZABBIX_HOST = "zab.h"
+ZABBIX_HOST = "zabbix.h"
 MONITORED_HOST = "1cDBHOST"
 
 log_file_path = LOG_DIRECTORY + "log 2020-06-29.txt"
@@ -28,7 +35,7 @@ class Detector:
         self.node = node
         self.key_name = key
         self.send_url = f'http://{host}/index.php?server={self.node}&key={self.key_name}&value='
-        self.buffer = ''
+        self.sending_buffer = ''
         Detector.detector_list.append(self)
 
     def __call__(self, log_string):
@@ -37,18 +44,15 @@ class Detector:
     def send_detectors_data_to_zabbix(self):
         """
         отправка собранных данных по http
-        :return:
         """
-        http_request_result = requests.get(self.send_url + self.buffer)
+        http_request_result = requests.get(self.send_url + self.sending_buffer)
         print(http_request_result.text)
 
 
 class MatchDetector(Detector):
     def __call__(self, log_string):
         """
-        на вход получает строку лога, и забирает полезное к себе в буфер
-        :param log_string:
-        :return:
+        детектор собирает в се строки с указанной подстрокой и отправляет как многострочный фрагмент фрагмент текста
         """
         if self.regexp in log_string:
             self.buffer = self.buffer + urllib.parse.quote(log_string)
@@ -56,20 +60,20 @@ class MatchDetector(Detector):
 
 class SizeDetector(Detector):
     """
-    Определяет размер бэкапа в байтах, забикс сам при указании единиц переводит в
+    Определяет размер бэкапа в байтах, заббикс сам при указании единиц переводит в
     единицы измерения большего размера.
     """
 
     def __call__(self, log_string):
         if self.regexp in log_string:
             splited_string = log_string.split()
-            backup_size = self.size_to_default_units(float(splited_string[-3].replace(",", ".")), splited_string[-2])
-            self.buffer = str(backup_size)
+            backup_size = self.convert_size_to_default_units(float(splited_string[-3].replace(",", ".")), splited_string[-2])
+            self.sending_buffer = str(backup_size)
 
     @staticmethod
-    def size_to_default_units(size, units):
+    def convert_size_to_default_units(size, units):
         """перевод единиц измерения, на вход - кол-во и едницы, на выход кол-во в байтах
-        использовал 1000, а не 1024, потому что заббикс преобразовывает с 1024"""
+        использовал 1000, а не 1024, потому что заббикс преобразовывает с 1024 самостоятельно"""
         dct = {'b': 1000, 'KB': 1000 ** 2, 'MB': 1000 ** 3, 'GB': 1000 ** 4}
         default_units = 'b'
         return size * dct[units] / dct[default_units]
@@ -86,7 +90,7 @@ class BackupTimeDetector(Detector):
             minutes = splited_string[-4]
             seconds = splited_string[-2]
             totaltime = float(hours) + (float(minutes) / 60) + (float(seconds) / 3600)
-            self.buffer = str(totaltime)
+            self.sending_buffer = str(totaltime)
 
 
 MatchDetector("ERR", ZABBIX_HOST, MONITORED_HOST, 'ErrorEventHook')
