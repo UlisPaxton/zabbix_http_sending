@@ -1,5 +1,5 @@
 # Отправка данных в Zabbix по Http
-Написано на основе статьи https://habr.com/ru/post/253799/
+Написано на основе статьи https://habr.com/ru/post/253799/ Спасибо Алексею Бурову.
 
 Installation:
 - разместить файл index.php на сервере zabbix в /var/www/html
